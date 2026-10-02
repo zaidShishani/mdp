@@ -13,17 +13,17 @@ import (
 
 const (
 	header = `<!DOCTYPE html>
-		<html>
-			<head>
-				<meta http-equiv="content-type" content="text/html; charset=utf-8">
-				<title>Markdown Preview Tool</title>
-			</head>
-			<body>
-		`
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <title>Markdown Preview Tool</title>
+  </head>
+  <body>
+`
 	footer = `
-			</body>
-		</html>
-		`
+  </body>
+</html>
+`
 )
 
 func main() {
@@ -32,6 +32,11 @@ func main() {
 
 	if *filename == "" {
 		flag.Usage()
+		os.Exit(1)
+	}
+
+	if err := run(*filename); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
