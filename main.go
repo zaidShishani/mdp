@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/microcosm-cc/bluemonday"
@@ -17,6 +18,7 @@ import (
 
 type content struct {
 	Title string
+	Name  string
 	Body  template.HTML
 }
 
@@ -28,6 +30,7 @@ const (
 <title>{{ .Title }}</title>
 </head>
 <body>
+<h1>{{ .Name }}</h1>
 {{ .Body }}
 </body>
 </html>
@@ -40,23 +43,30 @@ func main() {
 	tFname := flag.String("t", "", "Alternate template name")
 	flag.Parse()
 
-	if *filename == "" {
-		flag.Usage()
-		os.Exit(1)
+	var in = os.Stdin
+	name := "stdin"
+	if *filename != "" {
+		f, err := os.Open(*filename)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		defer f.Close()
+		in, name = f, *filename
 	}
 
-	if err := run(*filename, *tFname, os.Stdout, *skipPreview); err != nil {
+	if err := run(name, in, *tFname, os.Stdout, *skipPreview); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run(filename string, tFname string, out io.Writer, skipPreview bool) error {
-	input, err := os.ReadFile(filename)
+func run(name string, in io.Reader, tFname string, out io.Writer, skipPreview bool) error {
+	input, err := io.ReadAll(in)
 	if err != nil {
 		return err
 	}
-	htmlData, err := parseContent(input, tFname)
+	htmlData, err := parseContent(name, input, tFname)
 	if err != nil {
 		return err
 	}
@@ -85,7 +95,7 @@ func run(filename string, tFname string, out io.Writer, skipPreview bool) error 
 	return preview(outName)
 }
 
-func parseContent(input []byte, tFname string) ([]byte, error) {
+func parseContent(name string, input []byte, tFname string) ([]byte, error) {
 	unsafe := blackfriday.Run(input)
 	body := bluemonday.UGCPolicy().SanitizeBytes(unsafe)
 	body = bytes.TrimRight(bytes.ReplaceAll(body, []byte("\n\n"), []byte("\n")), "\n")
@@ -95,6 +105,10 @@ func parseContent(input []byte, tFname string) ([]byte, error) {
 		return nil, err
 	}
 
+	if tFname == "" {
+		tFname = os.Getenv("FILE_TEMPLATE")
+	}
+
 	if tFname != "" {
 		t, err = template.ParseFiles(tFname)
 		if err != nil {
@@ -102,8 +116,10 @@ func parseContent(input []byte, tFname string) ([]byte, error) {
 		}
 	}
 
+	displayName := strings.TrimSuffix(name, ".md")
 	c := content{
 		Title: "Markdown Preview Tool",
+		Name:  displayName,
 		Body:  template.HTML(body),
 	}
 
